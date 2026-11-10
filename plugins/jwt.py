@@ -34,6 +34,7 @@ def access(request):
         return
     # Replaces any the client sent, so it can't name a user itself.
     request.set_header("X-User-Id", str(user_id))
+    request.state["user_id"] = user_id
 
 
 def _bearer_token(headers):

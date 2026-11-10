@@ -68,7 +68,8 @@ plugin does, and tells the service who sent the request.
   a whole number from 1 up. `typ` and `iat` aren't checked, and `exp`
   is ignored until token expiry, a follow-up in `../TODO.md`.
 - Valid: it removes the client's `X-User-Id`, if any, and sets it to
-  `sub`.
+  `sub`, and puts the id, an `int`, in `request.state["user_id"]` for
+  the plugins after it, such as `rate_limit`.
 - No `Authorization` header, or one that isn't `Bearer`: `401` with
   `WWW-Authenticate: Bearer` and the detail "No token; log in first."
 - An invalid token: `401` with `WWW-Authenticate: Bearer
@@ -117,6 +118,60 @@ Its settings, each a `python_setting`, as Kong's plugin config:
   `Authorization` from JavaScript, not in a cookie, and no
   `Access-Control-Expose-Headers`, as the pages need only the status
   and body.
+
+## The rate_limit plugin
+
+`plugins/rate_limit.py` limits how many requests each client sends to
+a location, as Kong's rate-limiting plugin does with its `local`
+policy: the counts are in a dict in the plugin, which every request
+sees, as tinyproxy is one process with one interpreter. (Kong runs
+several nginx workers, so its `local` counts are per worker, and its
+`redis` policy shares them.)
+
+Its settings, each a `python_setting`, as Kong's `second`, `minute`
+and `hour`:
+
+| Setting | What it is |
+|---|---|
+| `rate_limit_second` | Requests allowed in each second |
+| `rate_limit_minute` | Requests allowed in each minute |
+| `rate_limit_hour` | Requests allowed in each hour |
+
+Each is a whole number from 1 up. A location may set any of them, and
+each one set is checked; one set to something else, or none set at
+all, raises when a request comes, so that request gets `500`.
+
+- **Fixed windows**, as Kong's: each window is a second, minute or
+  hour of the clock, starting at `time.time()` rounded down to a whole
+  one, and each has a count, which starts again at 0 when the next
+  window starts. So a client can send up to twice a limit across the
+  end of one window and the start of the next. A sliding window (Kong
+  Enterprise's `rate-limiting-advanced`) or a leaky bucket (nginx's
+  `limit_req`) would smooth that out.
+- **Who is counted:** the user, from `request.state["user_id"]`, where
+  `jwt` ran before it, otherwise `request.remote_addr`, as Kong's
+  `limit_by` `consumer` falls back to the IP. Each location counts
+  apart, by `request.location`, as Kong counts per route. So a
+  location's `plugins` lists it after `cors` and `jwt`: a preflight or
+  a `401` isn't counted.
+- **In `access`:** if any window's count has reached its limit, the
+  request gets `429`, a Problem Details with the detail "Too many
+  requests; try again in N seconds." and `Retry-After: N`, where N is
+  the whole seconds, rounded up, until the last of the full windows
+  ends. A refused request isn't counted. Otherwise every window's count
+  goes up by one, and the request goes on.
+- **In `header_filter`:** every reply to a request it counted or
+  refused, the service's or the `429`, gets `RateLimit-Limit`,
+  `RateLimit-Remaining` and `RateLimit-Reset`, as Kong sends, for the
+  window with the fewest requests left after this one, the longest of
+  those if they tie: its limit, what's left (0 at least), and the whole
+  seconds, rounded up, until it ends. (Kong also sends
+  `X-RateLimit-Limit-Minute` and the like for each window; they're left
+  out, as they say the same.)
+- **Forgetting:** only the current window's counts are kept for each
+  length of window. The first request in a new window clears that
+  length's counts, so the dict holds no more than the clients seen in
+  the current hour. (Kong's are in nginx's shared dict, and expire.)
 
 ## Errors
 

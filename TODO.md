@@ -10,6 +10,7 @@ tinygateway/
     __init__.py
     jwt.py        the token check and X-User-Id
     cors.py       letting pages from other origins call the API
+    rate_limit.py how many requests each client may send
 ```
 
 ## Stage 8: plugins at the phases
@@ -49,3 +50,19 @@ As in `DESIGN.md`, "The cors plugin":
       `*`; a service's own header replaced; an `OPTIONS` that isn't a
       preflight going on to the service
 
+## Stage 10: rate limiting
+
+As in `DESIGN.md`, "The rate_limit plugin":
+
+- [x] `request.location` in tinyproxy, as `../tinyproxy/DESIGN.md`
+      says, in `../tinyproxy/python/request_attributes.c`
+- [x] `request.state["user_id"]` in `plugins/jwt.py`
+- [x] `plugins/rate_limit.py`
+- [x] `rate_limit` and each location's limits in
+      `../shop/gateway.conf`, as "High-level architecture" in
+      `../DESIGN.md` says
+- [x] Try it by hand: `/login` past its limit by IP (`429`,
+      `Retry-After`, the `RateLimit-*` headers) while `/search` still
+      answers; two users on `/orders` counted apart; a preflight not
+      counted; the count starting again in the next window; a location
+      with no limits, or a bad one (`500`)
