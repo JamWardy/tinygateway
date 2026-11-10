@@ -78,6 +78,46 @@ plugin does, and tells the service who sent the request.
   own words, sent with `request.respond`, as `error` isn't called for
   a plugin's replies.
 
+## The cors plugin
+
+`plugins/cors.py` lets pages from other origins call the API, as Kong's
+cors plugin does. A browser lets a page read a reply from another
+origin only if the reply allows that origin, and before a request
+that isn't a simple one, such as a `POST` with JSON or a token, it
+first asks with a preflight: an `OPTIONS` request with
+`Access-Control-Request-Method`.
+
+Its settings, each a `python_setting`, as Kong's plugin config:
+
+| Setting | What it is | When it's left out |
+|---|---|---|
+| `cors_origins` | Allowed origins, separated by spaces, matched exactly; `*` allows any | No origin is allowed |
+| `cors_methods` | `Access-Control-Allow-Methods` | Kong's default, `GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS, TRACE, CONNECT` |
+| `cors_headers` | `Access-Control-Allow-Headers` | The headers the preflight asked for, as Kong's default |
+| `cors_max_age` | `Access-Control-Max-Age`, in seconds | No header, so the browser's own default |
+
+- **A preflight**, `OPTIONS` with `Origin` and
+  `Access-Control-Request-Method`, is answered in `access` with `204`,
+  `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers` and
+  `Access-Control-Max-Age`, and never reaches the service. (Kong
+  answers `200`.) So `cors` goes before `jwt` in a location's
+  `plugins`, or `jwt` would refuse the preflight, which carries no
+  token. Any other `OPTIONS` goes on to the service.
+- **Every reply** to a request whose `Origin` is allowed gets, in
+  `header_filter`, `Access-Control-Allow-Origin`: the origin itself,
+  with `Vary: Origin` so a cache keeps one per origin, or `*` when
+  `cors_origins` is `*`. Any the service sent is replaced. As
+  `header_filter` runs on tinyproxy's own replies too, that includes
+  the preflight's `204`, jwt's `401` and the gateway's `404`.
+- **An origin that isn't allowed** gets no CORS headers, as in Kong;
+  its preflight still gets `204`, and its other requests go on as
+  usual. The browser then keeps the reply from the page: CORS stops a
+  page reading, not a request being sent.
+- No `Access-Control-Allow-Credentials`, as the token goes in
+  `Authorization` from JavaScript, not in a cookie, and no
+  `Access-Control-Expose-Headers`, as the pages need only the status
+  and body.
+
 ## Errors
 
 tinyproxy's own errors become Problem Details, as `../DESIGN.md`'s

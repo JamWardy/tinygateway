@@ -9,6 +9,7 @@ tinygateway/
   plugins/
     __init__.py
     jwt.py        the token check and X-User-Id
+    cors.py       letting pages from other origins call the API
 ```
 
 ## Stage 8: plugins at the phases
@@ -35,4 +36,16 @@ As in `DESIGN.md`, "The jwt plugin":
       a real token from `POST /login` makes a listing with the right
       seller, with a forged `X-User-Id` replaced; tinyproxy refusing
       to start without `SHOP_JWT_SECRET`
+
+## CORS
+
+As in `DESIGN.md`, "The cors plugin":
+
+- [x] `plugins/cors.py`
+- [x] `cors` on every location in `../shop/gateway.conf`, before `jwt`
+- [x] Try it by hand: a preflight from an allowed origin and from
+      another; a `POST` with a token and one without (`401`), and an
+      unknown path (`404`), each with `Access-Control-Allow-Origin`;
+      `*`; a service's own header replaced; an `OPTIONS` that isn't a
+      preflight going on to the service
 
