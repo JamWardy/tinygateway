@@ -4,7 +4,7 @@ import http
 import json
 
 
-def problem_details(status):
+def problem_details(status, detail=None, headers=()):
     """The reply for status: its own words as the title, as for any error
     without a title of its own."""
     try:
@@ -12,5 +12,7 @@ def problem_details(status):
     except ValueError:
         title = "Error"
     problem = {"title": title, "status": status}
-    headers = [("Content-Type", "application/problem+json")]
+    if detail is not None:
+        problem["detail"] = detail
+    headers = [("Content-Type", "application/problem+json"), *headers]
     return status, headers, json.dumps(problem)

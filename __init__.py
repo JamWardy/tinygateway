@@ -2,8 +2,9 @@
 in the order it names them."""
 
 import importlib
+import pkgutil
 
-from . import errors
+from . import errors, plugins
 
 _plugins = {}  # By name, once a request has named it.
 
@@ -18,6 +19,16 @@ def _load(name):
                 raise  # Something the plugin imports is missing.
             raise LookupError(f"no plugin named {name!r}") from None
     return _plugins[name]
+
+
+def init():
+    """Import every plugin, as Kong loads its plugins at startup, so one
+    that can't start, such as jwt without its secret, stops tinyproxy
+    rather than failing a request later."""
+    for module in pkgutil.iter_modules(plugins.__path__):
+        plugin = _load(module.name)
+        if hasattr(plugin, "init"):
+            plugin.init()
 
 
 def _hooks(request, phase):
